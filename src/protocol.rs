@@ -299,15 +299,19 @@ pub struct DataPackage {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Bounced {
     /// Optional. Game names this message is targeting
+    #[serde(default)]
     pub games: Vec<String>,
 
     /// Optional. Player slot IDs that this message is targeting
+    #[serde(default)]
     pub slots: Vec<i64>,
 
     /// Optional. Client Tags this message is targeting
+    #[serde(default)]
     pub tags: Vec<String>,
 
     /// The data in the Bounce package copied
+    #[serde(default)]
     data: serde_json::Value,
 }
 
@@ -329,17 +333,17 @@ pub struct InvalidPacket {
 /// PacketProblemType indicates the type of problem that was detected in the
 /// faulty packet, the known problem types are below but others may be added in
 /// the future.
+///
+/// Other packet types may be added in the future.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum PacketProblemType {
     /// cmd argument of the faulty packet that could not be parsed correctly.
     Cmd,
 
     /// Arguments of the faulty packet which were not correct.
     Arguments,
-
-    /// Other packet types may be added in the future.
-    Other(String),
 }
 
 /// Sent to clients as a response the a Get package.
@@ -688,9 +692,6 @@ pub struct NetworkItem {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JSONMessagePart {
-    Text {
-        text: String,
-    },
     PlayerId {
         text: String,
         player: i64,
@@ -722,6 +723,10 @@ pub enum JSONMessagePart {
     Color {
         text: String,
         color: JSONColor,
+    },
+    #[serde(untagged)]
+    Text {
+        text: String,
     },
 }
 
