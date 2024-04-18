@@ -1,8 +1,23 @@
 [package]
-name = "archapelago"
+name = "archipelago"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+futures = "0.3"
+http = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_repr = "0.1"
+tokio = "1.0"
+tokio-tungstenite = { version = "0.21", features = ["native-tls"] }
+tungstenite = "0.21"
+thiserror = "1.0"
+uuid = { version = "1.8", features = ["v4"] }
+
+# Temporary
+anyhow = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["rt", "macros"] }

@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::BitOr};
 
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// Server -> Client messages
 ///
@@ -9,18 +10,26 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "cmd")]
 pub enum ServerMessage {
-    RoomInfo(RoomInfo),
-    ConnectionRefused(ConnectionRefused),
-    Connected(Connected),
     ReceivedItems(ReceivedItems),
     LocationInfo(LocationInfo),
     RoomUpdate(RoomUpdate),
     PrintJSON(PrintJSON),
-    DataPackage(DataPackage),
     Bounced(Bounced),
-    InvalidPacket(InvalidPacket),
     Retrieved(Retrieved),
     SetReply(SetReply),
+
+    InvalidPacket(InvalidPacket),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "cmd")]
+pub enum AnonymousServerMessage {
+    RoomInfo(RoomInfo),
+    ConnectionRefused(ConnectionRefused),
+    Connected(Connected),
+    DataPackage(DataPackage),
+
+    InvalidPacket(InvalidPacket),
 }
 
 /// Sent to clients when they connect to an Archipelago server.
@@ -135,7 +144,7 @@ pub struct Connected {
     ///
     /// TODO: the key is actually an i64, but json isn't allowed to have
     /// non-string keys, so we need to parse it.
-    pub slot_info: HashMap<i64, NetworkSlot>,
+    pub slot_info: HashMap<String, NetworkSlot>,
 
     /// Number of hint points that the current player has.
     pub hint_points: i64,
@@ -401,7 +410,8 @@ pub struct Connect {
 
     /// Denotes special features or capabilities that the sender is capable of.
     /// Tags.
-    pub tags: Vec<ClientTag>,
+    /// TODO: switch back to pub tags: Vec<ClientTag>,
+    pub tags: Vec<String>,
 
     /// If true, the Connect answer will contain slot_data
     pub slot_data: bool,
@@ -414,16 +424,28 @@ pub type SyncRequest = ();
 pub struct ItemsHandlingFlags(u8);
 
 impl ItemsHandlingFlags {
+    pub const CAN_RECEIVE_ITEMS: Self = Self(0b1);
+    pub const HAS_LOCAL_ITEMS: Self = Self(0b10);
+    pub const REQUEST_STARTING_INVENTORY: Self = Self(0b100);
+
     pub fn can_receive_items(&self) -> bool {
-        self.0 & 0b1 != 0
+        self.0 & Self::CAN_RECEIVE_ITEMS.0 != 0
     }
 
     pub fn has_local_items(&self) -> bool {
-        self.can_receive_items() && self.0 & 0b10 != 0
+        self.can_receive_items() && self.0 & Self::HAS_LOCAL_ITEMS.0 != 0
     }
 
     pub fn receive_starting_inventory(&self) -> bool {
-        self.can_receive_items() && self.0 & 0b100 != 0
+        self.can_receive_items() && self.0 & Self::REQUEST_STARTING_INVENTORY.0 != 0
+    }
+}
+
+impl BitOr for ItemsHandlingFlags {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
     }
 }
 
@@ -436,7 +458,9 @@ pub struct ConnectUpdate {
 
     /// Denotes special features or capabilities that the sender is capable of.
     /// Tags.
-    pub tags: Vec<ClientTag>,
+    ///
+    /// TODO: switch back to pub tags: Vec<ClientTag>,
+    pub tags: Vec<String>,
 }
 
 /// Sent to server to inform it of locations that the client has checked. Used
@@ -724,7 +748,8 @@ pub enum JSONColor {
     WhiteBg,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum ClientStatus {
     Unknown = 0,
     Connected = 5,
@@ -733,14 +758,26 @@ pub enum ClientStatus {
     Goal = 30,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct NetworkVersion {
     pub major: i64,
     pub minor: i64,
     pub build: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl serde::Serialize for NetworkVersion {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(4))?;
+        map.serialize_entry("major", &self.major)?;
+        map.serialize_entry("minor", &self.minor)?;
+        map.serialize_entry("build", &self.build)?;
+        map.serialize_entry("class", "Version")?;
+        map.end()
+    }
+}
+
+#[derive(Debug, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
 pub enum SlotType {
     Spectator = 0,
     Player = 1,
@@ -794,8 +831,9 @@ pub enum PermissionName {
     Remaining,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize_repr, Deserialize_repr)]
 #[serde(rename_all = "snake_case")]
+#[repr(u8)]
 pub enum Permission {
     Disabled = 0b000,
     Enabled = 0b001,
@@ -828,6 +866,7 @@ pub struct GameData {
     pub checksum: String,
 }
 
+/*
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientTag {
     AP,
@@ -836,6 +875,19 @@ pub enum ClientTag {
     TextOnly,
     Other(String), // TODO: ensure this serializes as expected
 }
+
+impl Into<ClientTag> for &str {
+    fn into(self) -> ClientTag {
+        match self {
+            "AP" => ClientTag::AP,
+            "DeathLink" => ClientTag::DeathLink,
+            "Tracker" => ClientTag::Tracker,
+            "TextOnly" => ClientTag::TextOnly,
+            _ => ClientTag::Other(self.to_string()),
+        }
+    }
+}
+ */
 
 pub struct DeathLink {
     pub time: f64,
